@@ -18,6 +18,19 @@
     max-width: 140px;
 }
 
+.call-button {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 8px;
+  color: #1a73e8;
+}
+
+.call-button:hover {
+  color: #0c47b7;
+}
+
 .ls-nav .menu img {
     max-height: 20px;
     opacity: 0.6;
