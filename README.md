@@ -40,5 +40,5 @@ This is a real-time chat application built using Firebase as the backend and Rea
 
 ### Steps to Install
 1. Clone the repository:
-   ```bash
+   ```bash  
    git clone https://github.com/Govind-2002/chat-app.git
