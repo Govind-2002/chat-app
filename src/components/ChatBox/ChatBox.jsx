@@ -32,38 +32,81 @@ const ChatBox = () => {
     toggleVideo,
     toggleAudio,
     switchToVideoCall,
+    isConnecting,
+    callDuration,
+    formatCallDuration,
   } = useContext(AppContext);
 
   const [input, setInput] = useState("");
   const [showCallOptions, setShowCallOptions] = useState(false);
   const scrollEnd = useRef();
+  
+  // Video refs
   const localVideoRef = useRef();
   const remoteVideoRef = useRef();
+  
+  // Audio refs
   const localAudioRef = useRef();
   const remoteAudioRef = useRef();
 
-  // Attach streams to video/audio elements
+  // **CRITICAL FIX: Properly attach streams to video elements**
+  useEffect(() => {
+    if (localStream && localVideoRef.current) {
+      console.log('🎥 Attaching local stream to video element');
+      localVideoRef.current.srcObject = localStream;
+      
+      // Force video to play
+      localVideoRef.current.play().catch(error => {
+        console.error('Error playing local video:', error);
+      });
+    }
+  }, [localStream]);
+
+  useEffect(() => {
+    if (remoteStream && remoteVideoRef.current) {
+      console.log('🎥 Attaching remote stream to video element');
+      remoteVideoRef.current.srcObject = remoteStream;
+      
+      // Force video to play
+      remoteVideoRef.current.play().catch(error => {
+        console.error('Error playing remote video:', error);
+      });
+    }
+  }, [remoteStream]);
+
+  // **CRITICAL FIX: Attach audio streams properly**
+  useEffect(() => {
+    if (remoteStream && remoteAudioRef.current) {
+      console.log('🔊 Attaching remote audio stream');
+      remoteAudioRef.current.srcObject = remoteStream;
+      remoteAudioRef.current.play().catch(error => {
+        console.error('Error playing remote audio:', error);
+      });
+    }
+  }, [remoteStream]);
+
+  // **DEBUG: Monitor stream changes**
   useEffect(() => {
     if (localStream) {
-      if (isVideoCall && localVideoRef.current) {
-        localVideoRef.current.srcObject = localStream;
-      }
-      if (localAudioRef.current) {
-        localAudioRef.current.srcObject = localStream;
-      }
+      console.log('📹 Local stream tracks:', localStream.getTracks().map(track => ({
+        kind: track.kind,
+        enabled: track.enabled,
+        readyState: track.readyState,
+        label: track.label
+      })));
     }
-  }, [localStream, isVideoCall]);
+  }, [localStream]);
 
   useEffect(() => {
     if (remoteStream) {
-      if (isVideoCall && remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = remoteStream;
-      }
-      if (remoteAudioRef.current) {
-        remoteAudioRef.current.srcObject = remoteStream;
-      }
+      console.log('📹 Remote stream tracks:', remoteStream.getTracks().map(track => ({
+        kind: track.kind,
+        enabled: track.enabled,
+        readyState: track.readyState,
+        label: track.label
+      })));
     }
-  }, [remoteStream, isVideoCall]);
+  }, [remoteStream]);
 
   const sendMessage = async () => {
     try {
@@ -126,8 +169,8 @@ const ChatBox = () => {
               alt="Caller" 
               className="caller-avatar"
             />
-            <p>{callerName} is calling you</p>
-            <p className="call-type">{isVideo ? 'Video Call' : 'Voice Call'}</p>
+            <p className="caller-name">{callerName} is calling you</p>
+            <p className="call-type">{isVideo ? '📹 Video Call' : '📞 Voice Call'}</p>
           </div>
           <div className="incoming-call-buttons">
             <button onClick={onAccept} className="accept-call-btn" title="Accept Call">
@@ -142,43 +185,101 @@ const ChatBox = () => {
     );
   };
 
-  // Video Call Interface Component
+  // **ENHANCED Video Call Interface Component**
   const VideoCallInterface = () => {
     return (
       <div className="video-call-interface">
-        <div className="video-container">
-          {/* Remote video (main view) */}
-          <div className="remote-video-container">
-            {isVideoCall ? (
-              <video
-                ref={remoteVideoRef}
-                autoPlay
-                playsInline
-                className="remote-video"
-              />
-            ) : (
-              <div className="audio-call-display">
-                <img 
-                  src={chatUser?.userData?.avatar || assets.profile_img} 
-                  alt="Remote user" 
-                  className="audio-call-avatar"
-                />
-                <p>{chatUser?.userData?.name}</p>
-                <p className="call-status">Voice Call</p>
-              </div>
-            )}
+        {/* Call header with user info and duration */}
+        <div className="call-header">
+          <div className="call-user-info">
+            <img 
+              src={chatUser?.userData?.avatar || assets.profile_img} 
+              alt="Call user" 
+              className="call-user-avatar"
+            />
+            <div>
+              <p className="call-user-name">{chatUser?.userData?.name || 'Unknown'}</p>
+              <p className="call-duration">
+                {isConnecting ? 'Connecting...' : formatCallDuration(callDuration)}
+              </p>
+            </div>
           </div>
+        </div>
 
-          {/* Local video (picture-in-picture) */}
-          {isVideoCall && (
-            <div className="local-video-container">
-              <video
-                ref={localVideoRef}
-                autoPlay
-                playsInline
-                muted
-                className="local-video"
+        {/* Video container */}
+        <div className="video-container">
+          {isVideoCall ? (
+            <>
+              {/* Remote video (main view) */}
+              <div className="remote-video-container">
+                <video
+                  ref={remoteVideoRef}
+                  autoPlay
+                  playsInline
+                  className="remote-video"
+                  onLoadedMetadata={() => {
+                    console.log('🎥 Remote video metadata loaded');
+                  }}
+                  onPlay={() => {
+                    console.log('▶️ Remote video started playing');
+                  }}
+                  onError={(e) => {
+                    console.error('❌ Remote video error:', e);
+                  }}
+                />
+                
+                {/* Fallback if no remote video */}
+                {(!remoteStream || remoteStream.getVideoTracks().length === 0) && (
+                  <div className="video-placeholder">
+                    <img 
+                      src={chatUser?.userData?.avatar || assets.profile_img} 
+                      alt="Remote user" 
+                      className="video-placeholder-avatar"
+                    />
+                    <p>Camera not available</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Local video (picture-in-picture) */}
+              <div className="local-video-container">
+                <video
+                  ref={localVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="local-video"
+                  onLoadedMetadata={() => {
+                    console.log('🎥 Local video metadata loaded');
+                  }}
+                  onPlay={() => {
+                    console.log('▶️ Local video started playing');
+                  }}
+                  onError={(e) => {
+                    console.error('❌ Local video error:', e);
+                  }}
+                />
+                
+                {/* Video disabled overlay */}
+                {!isVideoEnabled && (
+                  <div className="video-disabled-overlay">
+                    <p>📷</p>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            /* Audio call display */
+            <div className="audio-call-display">
+              <img 
+                src={chatUser?.userData?.avatar || assets.profile_img} 
+                alt="Remote user" 
+                className="audio-call-avatar"
               />
+              <p className="audio-call-name">{chatUser?.userData?.name}</p>
+              <p className="call-status">
+                {isConnecting ? 'Connecting...' : 'Voice Call Active'}
+              </p>
             </div>
           )}
         </div>
@@ -194,25 +295,23 @@ const ChatBox = () => {
             {isAudioEnabled ? '🎤' : '🔇'}
           </button>
 
-          {/* Video toggle (only show if it's a video call) */}
-          {isVideoCall && (
-            <button
-              onClick={toggleVideo}
-              className={`control-btn ${isVideoEnabled ? 'active' : 'disabled'}`}
-              title={isVideoEnabled ? 'Turn off video' : 'Turn on video'}
-            >
-              {isVideoEnabled ? '📹' : '📷'}
-            </button>
-          )}
+          {/* Video toggle */}
+          <button
+            onClick={toggleVideo}
+            className={`control-btn ${isVideoEnabled ? 'active' : 'disabled'}`}
+            title={isVideoEnabled ? 'Turn off video' : 'Turn on video'}
+          >
+            {isVideoEnabled ? '📹' : '📷'}
+          </button>
 
           {/* Switch to video call (only show during voice calls) */}
           {!isVideoCall && (
             <button
               onClick={switchToVideoCall}
-              className="control-btn"
+              className="control-btn switch-video"
               title="Switch to video call"
             >
-              📹
+              📹+
             </button>
           )}
 
@@ -436,9 +535,13 @@ const ChatBox = () => {
         </>
       )}
 
-      {/* Hidden audio elements for audio streams */}
-      <audio ref={localAudioRef} autoPlay muted />
-      <audio ref={remoteAudioRef} autoPlay />
+      {/* **CRITICAL: Hidden audio element for remote audio** */}
+      <audio 
+        ref={remoteAudioRef} 
+        autoPlay 
+        playsInline
+        style={{ display: 'none' }}
+      />
     </div>
   ) : (
     <div className={`chat-welcome ${chatVisible ? "" : "hidden"}`}>
